@@ -5,6 +5,7 @@ import eu.darken.sdmse.common.upgrade.UpgradeRepo
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -16,6 +17,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -178,6 +180,50 @@ class UpgradeRepoFossTest : BaseTest() {
                     error shouldBe null
                 }
             }
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test fun `onAppStart seeds an upgrade record when the device has none`(): Unit = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val upgradeValue = createUpgradeValue(flowOf(null))
+            val repo = createRepo(scope, upgradeValue)
+
+            withTimeout(10_000) { repo.onAppStart() }
+
+            // 自用构建的自动解锁：没有记录时必须写入一条，否则删除类任务会停在"需要升级"。
+            coVerify { upgradeValue.update(any()) }
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test fun `onAppStart leaves an existing upgrade record alone`(): Unit = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val upgradeValue = createUpgradeValue(flowOf(record))
+            val repo = createRepo(scope, upgradeValue)
+
+            withTimeout(10_000) { repo.onAppStart() }
+
+            // 已有记录（真实支持者或被种子过的安装）不能被覆盖，upgradedAt 是用户可见的日期。
+            coVerify(exactly = 0) { upgradeValue.update(any()) }
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test fun `onAppStart survives a broken store without throwing`(): Unit = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val upgradeValue = createUpgradeValue(flowOf(null))
+            coEvery { upgradeValue.update(any()) } throws IOException("write broken")
+            val repo = createRepo(scope, upgradeValue)
+
+            // 接口契约：onAppStart 在 App.onCreate() 的 appScope 里跑，存储坏了也只能记日志，不能抛。
+            withTimeout(10_000) { repo.onAppStart() }
         } finally {
             scope.cancel()
         }

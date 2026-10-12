@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -120,7 +121,15 @@ class UpgradeRepoFoss @Inject constructor(
     }
 
     override suspend fun onAppStart() {
-        log(TAG) { "onAppStart(): nothing to schedule" }
+        log(TAG) { "onAppStart()" }
+        try {
+            // 自用 fork 自动解锁：本机无赞助记录时写入一条（create-only，已有记录不覆盖），
+            // 让删除类任务（AppCleaner 处理、Deduplicator 删除）等 Pro 门控首次启动即放行。
+            if (!upgradeInfo.first().isPro) persistUpgrade()
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            log(TAG, WARN) { "onAppStart(): Failed to seed upgrade record: ${e.asLog()}" }
+        }
     }
 
     data class Info(
