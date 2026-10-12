@@ -7,7 +7,7 @@ import eu.darken.sdmse.appcontrol.core.AppControl
 import eu.darken.sdmse.common.WebpageTool
 import eu.darken.sdmse.common.areas.DataAreaManager
 import eu.darken.sdmse.common.datastore.DataStoreValue
-import eu.darken.sdmse.common.debug.DebugCardProvider
+import eu.darken.sdmse.common.debug.DebugSettings
 import eu.darken.sdmse.common.debug.recorder.core.DebugLogSessionManager
 import eu.darken.sdmse.common.navigation.NavEvent
 import eu.darken.sdmse.common.review.ReviewTool
@@ -53,6 +53,7 @@ import org.junit.jupiter.api.Test
 import testhelpers.BaseTest
 import testhelpers.coroutine.TestDispatcherProvider
 import testhelpers.coroutine.runTest2
+import testhelpers.mockDataStoreValue
 import java.time.Instant
 import java.util.UUID
 
@@ -97,8 +98,8 @@ internal class DashboardHeroToolRoutingTest : BaseTest() {
             every { upgradeInfo } returns emptyFlow()
         }
         val updateService = mockk<UpdateService>(relaxed = true).apply { every { availableUpdate } returns emptyFlow() }
-        val debugCardProvider = mockk<DebugCardProvider>(relaxed = true).apply {
-            every { create(any(), any(), any(), any()) } returns emptyFlow()
+        val debugSettings = mockk<DebugSettings>(relaxed = true).apply {
+            every { isDryRunMode } returns mockDataStoreValue(false)
         }
         val statsSettings = mockk<StatsSettings>(relaxed = true).apply {
             every { retentionReports } returns mockDuration()
@@ -135,7 +136,7 @@ internal class DashboardHeroToolRoutingTest : BaseTest() {
             appControl = appControl,
             analyzer = analyzer,
             analyzerSettings = analyzerSettings,
-            debugCardProvider = debugCardProvider,
+            debugSettings = debugSettings,
             deduplicator = deduplicator,
             squeezer = squeezer,
             swiper = swiper,

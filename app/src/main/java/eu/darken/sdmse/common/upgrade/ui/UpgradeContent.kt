@@ -99,7 +99,7 @@ internal object UpgradeScreenTags {
 // order and punctuation instead of the code assuming "name, space, qualifier".
 //
 // The two flags are deliberately separate. `includeQualifier` decides whether the tier word is part
-// of the title at all (the dashboard drops it while free); `highlightQualifier` only decides whether
+// of the title at all (the dashboard never includes it); `highlightQualifier` only decides whether
 // it is colored. The FOSS status-free view needs "SD Maid SE FOSS" in plain text, so it passes
 // (true, false) — collapsing these into one flag would silently drop FOSS from that screen.
 @Composable

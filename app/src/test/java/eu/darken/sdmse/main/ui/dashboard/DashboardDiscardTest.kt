@@ -10,7 +10,7 @@ import eu.darken.sdmse.appcontrol.core.AppControl
 import eu.darken.sdmse.common.WebpageTool
 import eu.darken.sdmse.common.areas.DataAreaManager
 import eu.darken.sdmse.common.datastore.DataStoreValue
-import eu.darken.sdmse.common.debug.DebugCardProvider
+import eu.darken.sdmse.common.debug.DebugSettings
 import eu.darken.sdmse.common.debug.recorder.core.DebugLogSessionManager
 import eu.darken.sdmse.common.review.ReviewTool
 import eu.darken.sdmse.common.updater.UpdateService
@@ -52,6 +52,7 @@ import org.junit.jupiter.api.Test
 import testhelpers.BaseTest
 import testhelpers.coroutine.TestDispatcherProvider
 import testhelpers.coroutine.runTest2
+import testhelpers.mockDataStoreValue
 import java.time.Instant
 
 /** Contract of [DashboardViewModel.discardResults]: clears all four tools when idle, aborts when busy. */
@@ -114,8 +115,8 @@ internal class DashboardDiscardTest : BaseTest() {
             appControl = appControl,
             analyzer = analyzer,
             analyzerSettings = analyzerSettings,
-            debugCardProvider = mockk<DebugCardProvider>(relaxed = true).apply {
-                every { create(any(), any(), any(), any()) } returns emptyFlow()
+            debugSettings = mockk<DebugSettings>(relaxed = true).apply {
+                every { isDryRunMode } returns mockDataStoreValue(false)
             },
             deduplicator = deduplicator,
             squeezer = squeezer,

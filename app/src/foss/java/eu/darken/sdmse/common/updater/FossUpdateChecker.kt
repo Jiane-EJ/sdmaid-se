@@ -118,8 +118,10 @@ class FossUpdateChecker @Inject constructor(
         return isEnabled
     }
 
+    // 自用构建：禁用自动更新检查。设置项、仪表盘更新卡、隐私页文案都由该开关条件隐藏，
+    // 置 false 后 6 小时周期的 GitHub 检查也不再发起（与 gplay 版的无更新形态一致）。
     override suspend fun isCheckSupported(): Boolean {
-        return true
+        return false
     }
 
     data class Update(

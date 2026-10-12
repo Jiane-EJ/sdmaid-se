@@ -7,7 +7,7 @@ import eu.darken.sdmse.appcontrol.core.AppControl
 import eu.darken.sdmse.common.WebpageTool
 import eu.darken.sdmse.common.areas.DataAreaManager
 import eu.darken.sdmse.common.datastore.DataStoreValue
-import eu.darken.sdmse.common.debug.DebugCardProvider
+import eu.darken.sdmse.common.debug.DebugSettings
 import eu.darken.sdmse.common.debug.recorder.core.DebugLogSessionManager
 import eu.darken.sdmse.common.review.ReviewTool
 import eu.darken.sdmse.common.updater.UpdateService
@@ -52,6 +52,7 @@ import org.junit.jupiter.api.Test
 import testhelpers.BaseTest
 import testhelpers.coroutine.TestDispatcherProvider
 import testhelpers.coroutine.runTest2
+import testhelpers.mockDataStoreValue
 import java.time.Duration
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -165,8 +166,8 @@ internal class DashboardAnalyzerForecastTest : BaseTest() {
                 every { progress } returns emptyFlow()
             },
             analyzerSettings = analyzerSettings,
-            debugCardProvider = mockk<DebugCardProvider>(relaxed = true).apply {
-                every { create(any(), any(), any(), any()) } returns emptyFlow()
+            debugSettings = mockk<DebugSettings>(relaxed = true).apply {
+                every { isDryRunMode } returns mockDataStoreValue(false)
             },
             deduplicator = mockk<Deduplicator>(relaxed = true).apply { every { state } returns emptyFlow() },
             squeezer = mockk<Squeezer>(relaxed = true).apply { every { state } returns emptyFlow() },

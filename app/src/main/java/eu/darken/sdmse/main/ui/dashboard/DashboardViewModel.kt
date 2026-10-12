@@ -25,19 +25,16 @@ import eu.darken.sdmse.common.areas.DataAreaManager
 import eu.darken.sdmse.common.coroutine.DispatcherProvider
 import eu.darken.sdmse.common.datastore.value
 import eu.darken.sdmse.common.datastore.valueBlocking
-import eu.darken.sdmse.common.debug.DebugCardProvider
+import eu.darken.sdmse.common.debug.DebugSettings
 import eu.darken.sdmse.common.debug.logging.Logging.Priority.INFO
 import eu.darken.sdmse.common.debug.logging.Logging.Priority.VERBOSE
 import eu.darken.sdmse.common.debug.logging.Logging.Priority.WARN
 import eu.darken.sdmse.common.debug.logging.asLog
 import eu.darken.sdmse.common.debug.logging.log
 import eu.darken.sdmse.common.debug.logging.logTag
-import eu.darken.sdmse.common.debug.recorder.core.DebugLogSession
 import eu.darken.sdmse.common.debug.recorder.core.DebugLogSessionManager
-import eu.darken.sdmse.common.debug.recorder.core.RecorderModule
 import eu.darken.sdmse.common.debug.recorder.core.SessionId
 import eu.darken.sdmse.common.device.DeviceDetective
-import eu.darken.sdmse.main.ui.dashboard.cards.DebugRecorderDashboardCardItem
 import eu.darken.sdmse.common.debug.recorder.ui.RecorderActivity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import eu.darken.sdmse.common.flow.intervalFlow
@@ -80,7 +77,6 @@ import eu.darken.sdmse.main.ui.dashboard.cards.AnalyzerDashboardCardItem
 import eu.darken.sdmse.main.ui.dashboard.cards.DashboardItem
 import eu.darken.sdmse.main.ui.dashboard.cards.AnniversaryDashboardCardItem
 import eu.darken.sdmse.main.ui.dashboard.cards.AppControlDashboardCardItem
-import eu.darken.sdmse.main.ui.dashboard.cards.DebugDashboardCardItem
 import eu.darken.sdmse.main.ui.dashboard.cards.DryRunWarningDashboardCardItem
 import eu.darken.sdmse.main.ui.dashboard.cards.ErrorDataAreaDashboardCardItem
 import eu.darken.sdmse.main.ui.dashboard.cards.MotdDashboardCardItem
@@ -153,7 +149,6 @@ class DashboardViewModel @Inject constructor(
     internal val appControl: AppControl,
     internal val analyzer: Analyzer,
     internal val analyzerSettings: AnalyzerSettings,
-    debugCardProvider: DebugCardProvider,
     internal val deduplicator: Deduplicator,
     internal val squeezer: Squeezer,
     swiper: Swiper,
@@ -163,6 +158,7 @@ class DashboardViewModel @Inject constructor(
     schedulerManager: SchedulerManager,
     internal val updateService: UpdateService,
     private val sessionManager: DebugLogSessionManager,
+    private val debugSettings: DebugSettings,
     internal val motdRepo: MotdRepo,
     private val releaseManager: ReleaseManager,
     private val reviewTool: ReviewTool,
@@ -310,13 +306,6 @@ class DashboardViewModel @Inject constructor(
     ) { _, config -> config }
 
     val listState: StateFlow<ListState?> = eu.darken.sdmse.common.flow.combine(
-        sessionManager.sessions.listStateSource("sessions", emptyList()),
-        debugCardProvider.create(
-            vm = this,
-            onNavigate = { navTo(it as eu.darken.sdmse.common.navigation.NavigationDestination) },
-            onError = { errorEvents.tryEmit(it) },
-            onShowEvent = { events.tryEmit(it) },
-        ).listStateSource("debug", null),
         titleCardItem.listStateDiag("title"),
         upgradeInfo.listStateDiag("upgrade"),
         updateInfo.listStateSource("update", null),
@@ -337,9 +326,8 @@ class DashboardViewModel @Inject constructor(
         swiperItem.listStateDiag("swiper"),
         easterEggTriggered.listStateDiag("easterEgg"),
         cardConfigWithRefresh.listStateDiag("cardConfig"),
-    ) { sessions: List<DebugLogSession>,
-        debugItem: DebugDashboardCardItem?,
-        titleInfo: TitleDashboardCardItem,
+        debugSettings.isDryRunMode.flow.listStateSource("dryRun", false),
+    ) { titleInfo: TitleDashboardCardItem,
         upgradeInfo: UpgradeRepo.Info?,
         updateInfo: UpdateDashboardCardItem?,
         setupItem: SetupDashboardCardItem?,
@@ -358,7 +346,8 @@ class DashboardViewModel @Inject constructor(
         statsItem: StatsDashboardCardItem?,
         swiperItem: SwiperDashboardCardItem?,
         easterEggTriggered,
-        cardConfig: DashboardCardConfig ->
+        cardConfig: DashboardCardConfig,
+        isDryRun: Boolean ->
         val items = mutableListOf<DashboardItem>(titleInfo)
 
         val noError = dataAreaError == null
@@ -384,12 +373,15 @@ class DashboardViewModel @Inject constructor(
         setupItem?.let { items.add(it) }
         dataAreaError?.let { items.add(it) }
 
-        // Dry-run makes every cleanup a no-op while still reporting freed space. The toggle lives at the
-        // bottom of the dashboard, so warn up top for as long as it's on. debugItem is null unless debug
-        // mode is on, which matches how App.kt gates Bugs.isDryRun.
-        debugItem
-            ?.takeIf { it.isDryRunEnabled }
-            ?.let { debug -> items.add(DryRunWarningDashboardCardItem(onDisable = { debug.onDryRunEnabled(false) })) }
+        // dry-run 开启时所有清理都是空跑（但仍报告释放空间），故开着就一直顶部预警。
+        // 开关存于调试设置，App.kt 对 Bugs.isDryRun 的门控与其一致。
+        if (isDryRun) {
+            items.add(
+                DryRunWarningDashboardCardItem(
+                    onDisable = { launch { debugSettings.isDryRunMode.value(false) } }
+                )
+            )
+        }
 
         anniversaryItem?.let { items.add(it) }
 
@@ -418,36 +410,6 @@ class DashboardViewModel @Inject constructor(
                 )
             }
             ?.run { items.add(this) }
-
-        val recordingSession = sessions.filterIsInstance<DebugLogSession.Recording>().firstOrNull()
-        val isRecording = recordingSession != null
-        if (isRecording || debugItem != null) {
-            val item = DebugRecorderDashboardCardItem(
-                webpageTool = webpageTool,
-                isRecording = isRecording,
-                currentLogDir = recordingSession?.logDir,
-                onToggleRecording = {
-                    if (isRecording) {
-                        launch {
-                            when (val result = sessionManager.requestStopRecording()) {
-                                is RecorderModule.StopResult.TooShort -> {
-                                    events.tryEmit(DashboardEvents.ShowShortRecordingWarning)
-                                }
-                                is RecorderModule.StopResult.Stopped -> {
-                                    launchRecorderActivity(result.sessionId)
-                                }
-                                is RecorderModule.StopResult.NotRecording -> {}
-                            }
-                        }
-                    } else {
-                        launch { sessionManager.startRecording() }
-                    }
-                }
-            )
-            items.add(item)
-        }
-
-        debugItem?.let { items.add(it) }
 
         ListState(
             items = items,

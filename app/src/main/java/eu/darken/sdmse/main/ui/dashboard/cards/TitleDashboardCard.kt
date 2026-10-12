@@ -6,25 +6,26 @@ import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.twotone.BugReport
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +34,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
@@ -43,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import eu.darken.sdmse.common.BuildConfigWrap
@@ -85,8 +89,8 @@ internal fun TitleDashboardCard(
 ) {
     val slogan = remember { getRngSlogan() }
     val sloganText = stringResource(slogan)
-    val isPro = item.upgradeInfo?.isPro == true
-    val titleText = brandTitle(includeQualifier = isPro, highlightQualifier = isPro)
+    // 顶部标题固定不带档位后缀（FOSS/Pro）：自用构建下与右侧金标并排会挤成两行。
+    val titleText = brandTitle(includeQualifier = false, highlightQualifier = false)
 
     val mascotRotation = remember { Animatable(0f) }
     val mascotImpact = remember { Animatable(0f) }
@@ -247,11 +251,11 @@ internal fun TitleDashboardCard(
                     )
                 }
             },
-            // Hidden in previews/screenshots (LocalInspectionMode) so the build-type ribbon doesn't
-            // leak into Play Store screenshots, which render the debug variant.
+            // The private ULTRA badge. Hidden in previews/screenshots (LocalInspectionMode) so it
+            // doesn't leak into Play Store screenshots, which render the debug variant.
             ribbon = if (BuildConfigWrap.BUILD_TYPE != BuildConfigWrap.BuildType.RELEASE && !LocalInspectionMode.current) {
                 {
-                    BuildTypeRibbon(onClick = item.onRibbonClicked)
+                    UltraBadge(onClick = item.onRibbonClicked)
                 }
             } else {
                 null
@@ -387,44 +391,43 @@ internal fun TitleHeaderLayout(
     }
 }
 
+// 金标 ULTRA 徽章：黑金配色（近黑渐变底 + 金渐变描边 + 奖章 + 亮金字）。
+private val UltraBlackTop = Color(0xFF2A210C)
+private val UltraBlackBottom = Color(0xFF0D0A02)
+private val UltraGoldBright = Color(0xFFF6DF8E)
+private val UltraGoldDeep = Color(0xFFC59A2B)
+
 @Composable
-private fun BuildTypeRibbon(
+private fun UltraBadge(
     onClick: () -> Unit,
 ) {
-    Surface(
-        color = MaterialTheme.colorScheme.tertiaryContainer,
-        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.clickable(onClick = onClick),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.TwoTone.BugReport,
-                    contentDescription = null,
-                    modifier = Modifier.size(12.dp),
-                )
-                Box(modifier = Modifier.padding(start = 2.dp)) {
-                    Text(
-                        text = when (BuildConfigWrap.BUILD_TYPE) {
-                            BuildConfigWrap.BuildType.DEV -> "Dev"
-                            BuildConfigWrap.BuildType.BETA -> "Beta"
-                            BuildConfigWrap.BuildType.RELEASE -> ""
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
-            Text(
-                text = BuildConfigWrap.VERSION_NAME,
-                style = MaterialTheme.typography.labelSmall,
+    val shape = RoundedCornerShape(10.dp)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .background(Brush.verticalGradient(listOf(UltraBlackTop, UltraBlackBottom)), shape)
+            .border(
+                width = 1.2.dp,
+                brush = Brush.verticalGradient(listOf(UltraGoldBright, UltraGoldDeep)),
+                shape = shape,
             )
-        }
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.WorkspacePremium,
+            contentDescription = null,
+            tint = UltraGoldBright,
+            modifier = Modifier.size(14.dp),
+        )
+        Text(
+            text = "ULTRA",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 2.5.sp,
+            color = UltraGoldBright,
+            modifier = Modifier.padding(start = 5.dp),
+        )
     }
 }
 
